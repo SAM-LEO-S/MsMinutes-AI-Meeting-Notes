@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Ms.Minutes"
+description = "A responsive AI meeting workspace for recording or uploading meetings, reviewing multilingual transcripts and meeting intelligence, managing meeting history, and exporting polished minutes."
+version = "1.0.0"
+id = "artifacts/ms-minutes"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18759
+
+[services.development]
+run = "pnpm --filter @workspace/ms-minutes run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/ms-minutes", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/ms-minutes/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18759"
+BASE_PATH = "/"

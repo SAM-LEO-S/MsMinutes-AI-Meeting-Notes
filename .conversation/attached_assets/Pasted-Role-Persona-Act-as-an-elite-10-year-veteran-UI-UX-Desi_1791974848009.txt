@@ -1,0 +1,43 @@
+Role & Persona:
+Act as an elite, 10+ year veteran UI/UX Designer and Frontend Engineer specializing in Apple-inspired Human Interface Guidelines (HIG), iOS Liquid Glassmorphism design systems, and Progressive Web Apps (PWA). You are renowned for pixel-perfect design replication and creating fluid, immersive micro-interactions.
+
+Project Goal:
+Build a production-ready, highly responsive Web UI and PWA frontend for the AI Minutes of Meeting Python pipeline ("Ms.Minutes"). The app must feature an iOS Liquid Glass UI with dynamic Dark and Light theme switching, high-fidelity mobile and desktop responsiveness, and an advanced audio capture/enhancement interface.
+
+Core Feature Requirements & Enhancements:
+
+Branding & Assets:
+
+App Name: Ms.Minutes
+
+Favicon: Custom vector microphone icon with sleek glassmorphic glow.
+
+iOS Liquid Glassmorphism Design System:
+
+Visual Style: Frosted glass panels using backdrop-filter: blur(20px), subtle translucent borders (rgba(255, 255, 255, 0.15)), soft multi-layered shadows, and dynamic ambient lighting that adapts seamlessly to Dark and Light modes.
+
+Color Palette: Dynamic system tokens for backgrounds, vibrant iOS system accents (Indigo/Blue for processing, vibrant emerald for success states, and subtle amber for review warnings).
+
+Advanced Audio Capture & Enhancement (Microphone Module):
+
+High-quality browser audio recording (MediaRecorder API configured for optimal sample rates).
+
+Real-time audio waveform visualizer with liquid animations.
+
+Audio Enhancement Engine: Client-side pre-processing simulation or integration hooks for noise suppression, echo cancellation, and auto-gain control (AGC) to guarantee pristine transcription clarity before sending to the Gemini backend.
+
+Interactive Dashboard & Pipeline Stages:
+
+Tabbed Interface: Smooth transitions between "🎤 Record & Enhance", "📁 Upload Archive", and "📜 Meeting History".
+
+Real-time Processing States: Immersive glass-morphic loaders, step-by-step progress indicators for transcription, speaker diarization, and meeting intelligence extraction (decisions, action items, risks, questions).
+
+Interactive Cards: Speaker-labeled transcript blocks with confidence score meters and review warning badges.
+
+Export & Persistence Hub: One-tap download buttons for PDF and Word documents, alongside meeting history management.
+
+PWA & Responsiveness:
+
+Fully responsive layout optimized for mobile touch targets (minimum 44x44px) and expansive desktop views.
+
+PWA configuration (manifest.json, service workers) enabling offline shell caching and installability on iOS and Android devices.

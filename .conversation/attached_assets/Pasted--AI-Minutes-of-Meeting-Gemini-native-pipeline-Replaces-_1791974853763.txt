@@ -1,0 +1,424 @@
+"""
+AI Minutes of Meeting — Gemini-native pipeline
+
+Replaces the separate Whisper + pyannote + translation-LLM chain with a
+single Gemini multimodal call that understands the raw audio directly:
+transcription, speaker separation, AND translation in one step.
+
+How speaker names work: each participant is expected to say their own
+name near the start of the meeting (e.g., "Hi, I'm Sam"). Gemini is
+instructed to pick that up from the audio itself. If someone never
+states their name, they're labeled "Speaker 1", "Speaker 2", etc.
+This trades perfect voice-biometric matching (what pyannote embeddings
+would give you) for zero enrollment setup — the right tradeoff for an
+MVP, revisit later if you need recognition without self-introduction.
+
+CHANGELOG (this version):
+- transcribe_diarize_translate() now waits for Gemini's File API to
+  finish processing the uploaded audio before using it (fixes spurious
+  failures right after upload).
+- call_gemini_with_retry() now uses exponential backoff WITH random
+  jitter, and more retries, to better survive sustained free-tier load.
+"""
+
+import os
+import json
+import random
+import time as time_module
+import numpy as np
+import sounddevice as sd
+from scipy.io.wavfile import write
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
+from groq import Groq
+from document_generator import MoMGenerator
+from database import MeetingDatabase
+
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
+gemini_api_key = os.getenv("GEMINI_KEY")
+groq_api_key = os.getenv("GROQ_API_KEY")
+
+if not gemini_api_key:
+    raise ValueError("GEMINI_KEY not found in .env")
+if not groq_api_key:
+    raise ValueError("GROQ_API_KEY not found in .env")
+
+gemini_client = genai.Client(api_key=gemini_api_key)
+groq_client = Groq(api_key=groq_api_key)  # still used for meeting intelligence extraction
+
+CONFIDENCE_REVIEW_THRESHOLD = 0.6
+
+
+# ---------------------------------------------------------------------------
+# Audio capture
+# ---------------------------------------------------------------------------
+
+def normalize_audio(audio_data, target_peak=0.9):
+    """Boost quiet recordings up to a healthy volume before sending for transcription."""
+    audio_float = audio_data.astype(np.float32)
+    current_peak = np.abs(audio_float).max()
+
+    if current_peak == 0:
+        print("Warning: completely silent recording detected!")
+        return audio_data
+
+    scale = (target_peak * 32767) / current_peak
+    normalized = audio_float * scale
+    normalized = np.clip(normalized, -32768, 32767)
+    return normalized.astype(np.int16)
+
+
+def trim_silence(audio_data, sample_rate, silence_threshold=500, padding_ms=300):
+    """Cuts off trailing/leading silence so the model doesn't hallucinate content to fill empty audio."""
+    amplitude = np.abs(audio_data)
+    is_sound = amplitude > silence_threshold
+
+    if not is_sound.any():
+        print("Warning: no speech detected in recording at all!")
+        return audio_data
+
+    sound_indices = np.where(is_sound)[0]
+    start = max(0, sound_indices[0] - int(padding_ms * sample_rate / 1000))
+    end = min(len(audio_data), sound_indices[-1] + int(padding_ms * sample_rate / 1000))
+
+    return audio_data[start:end]
+
+
+def record_meeting_audio(duration_seconds=30, sample_rate=16000):
+    """Record from the mic, normalize, trim silence, save to disk."""
+    print(f"🎙️  Recording for {duration_seconds} seconds... speak naturally (Tamil/English mixed OK).")
+    print("💡 Each person should say their name near the start, e.g. 'Hi, I'm Sam'.")
+
+    audio_data = sd.rec(
+        int(duration_seconds * sample_rate),
+        samplerate=sample_rate,
+        channels=1,
+        dtype='int16'
+    )
+    sd.wait()
+    print("✅ Recording finished")
+
+    audio_data = normalize_audio(audio_data)
+    audio_data = trim_silence(audio_data, sample_rate)
+
+    recordings_dir = os.path.join(os.path.dirname(__file__), "recordings")
+    os.makedirs(recordings_dir, exist_ok=True)
+    filename = os.path.join(recordings_dir, f"meeting_{int(time_module.time())}.wav")
+    write(filename, sample_rate, audio_data)
+    print(f"💾 Audio saved to {filename}")
+
+    return filename
+
+
+# ---------------------------------------------------------------------------
+# Gemini: transcription + diarization + translation, in one call
+# ---------------------------------------------------------------------------
+
+GEMINI_TRANSCRIPTION_PROMPT = """You are analyzing audio from a business meeting that may mix Tamil and English, including code-switched sentences (Tamil and English mixed within the same sentence).
+
+Your job:
+1. Identify each distinct speaker in the audio.
+2. If a speaker says their own name (e.g., "My name is Sam", "Hi, I'm Vignesh", "இது சாம் பேசுறேன்"), use that stated name as their label for the ENTIRE recording. If a speaker never states their name, label them "Speaker 1", "Speaker 2", etc. (in order of first appearance). Never guess a name that wasn't actually said.
+3. Split the audio into segments by speaker turn.
+4. For each segment, provide the ORIGINAL text exactly as spoken (preserving the Tamil/English mix as spoken, in correct script for each language).
+5. For each segment, also provide an ENGLISH TRANSLATION that preserves meaning, intent, and context — NOT a word-by-word translation. Keep names, numbers, dates, and technical terms accurate. If a segment is already in English, repeat it unchanged as the translation.
+
+Return ONLY a JSON array, no other text, in this exact format:
+[
+  {
+    "speaker": "Sam",
+    "start_time": "0:00",
+    "end_time": "0:04",
+    "original_text": "...",
+    "translated_text": "...",
+    "language": "ta"
+  }
+]
+
+"language" should be "ta" (Tamil), "en" (English), or "mixed" (code-switched).
+"""
+
+
+def call_gemini_with_retry(contents, response_mime_type=None, max_retries=10):
+    """
+    Wraps a Gemini call with exponential backoff + random jitter, to survive
+    transient server overload (503s) without hammering it at fixed intervals.
+    """
+    for attempt in range(max_retries):
+        try:
+            config = types.GenerateContentConfig(temperature=0.2)
+            if response_mime_type:
+                config.response_mime_type = response_mime_type
+            response = gemini_client.models.generate_content(
+                model="gemini-3.8-flash",
+                contents=contents,
+                config=config,
+            )
+            return response.text.strip()
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait_time = (2 ** attempt) + random.uniform(0, 1)
+                print(f"Gemini busy (attempt {attempt + 1}/{max_retries}), retrying in {wait_time:.1f}s...")
+                time_module.sleep(wait_time)
+            else:
+                raise
+
+
+def transcribe_diarize_translate(audio_path):
+    """
+    Uploads the audio file to Gemini, waits for it to finish processing,
+    then gets back a speaker-labeled, translated transcript in one call.
+    """
+    print("\n🔄 Uploading audio to Gemini...")
+    uploaded_file = gemini_client.files.upload(file=audio_path)
+
+    # Gemini processes audio/video files asynchronously after upload — using
+    # the file reference before it's ready can cause confusing failures.
+    while uploaded_file.state.name == "PROCESSING":
+        print("⏳ Waiting for Gemini to finish processing the audio file...")
+        time_module.sleep(2)
+        uploaded_file = gemini_client.files.get(name=uploaded_file.name)
+
+    if uploaded_file.state.name == "FAILED":
+        raise ValueError(f"Gemini failed to process the uploaded file (state: {uploaded_file.state})")
+
+    print("🔄 Transcribing, diarizing, and translating with Gemini...")
+    raw_response = call_gemini_with_retry(
+        contents=[uploaded_file, GEMINI_TRANSCRIPTION_PROMPT],
+        response_mime_type="application/json",
+    )
+
+    # Defensive cleanup in case the model wraps the JSON in markdown fences
+    cleaned = raw_response.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("```")[1]
+        if cleaned.startswith("json"):
+            cleaned = cleaned[4:]
+        cleaned = cleaned.strip()
+
+    try:
+        segments = json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        print(f"⚠️ Could not parse Gemini's response as JSON: {e}")
+        print(f"Raw response was:\n{raw_response}")
+        return []
+
+    return segments
+
+
+# ---------------------------------------------------------------------------
+# Meeting intelligence extraction (confidence-scored)
+# ---------------------------------------------------------------------------
+
+def extract_meeting_intelligence(transcript_text, speakers):
+    print("\n🧠 Extracting Meeting Intelligence...")
+
+    intelligence_prompt = f"""You are an expert meeting intelligence analyst. Analyze this meeting transcript and extract structured information.
+
+MEETING TRANSCRIPT:
+{transcript_text}
+
+SPEAKERS IN MEETING: {', '.join(speakers)}
+
+Extract the following information in a structured JSON format:
+{{
+    "decisions": [
+        {{"decision": "...", "speaker": "...", "context": "...", "confidence": 0.0}}
+    ],
+    "action_items": [
+        {{"action": "...", "assignee": "...", "deadline": "...", "priority": "high/medium/low", "confidence": 0.0}}
+    ],
+    "risks": [
+        {{"risk": "...", "speaker": "...", "severity": "high/medium/low", "confidence": 0.0}}
+    ],
+    "questions": [
+        {{"question": "...", "speaker": "...", "answered": true, "answer_summary": "...", "confidence": 0.0}}
+    ],
+    "summary": "Brief 2-3 sentence summary of the entire meeting"
+}}
+
+For "confidence" (0.0 to 1.0), rate how explicitly the transcript supports this extraction:
+- 0.9-1.0: Explicitly and unambiguously stated
+- 0.6-0.8: Reasonably clear but with some inference
+- Below 0.6: Implied, uncertain, or phrased as a possibility/suggestion rather than a firm statement
+
+Rules:
+- Only extract information actually mentioned in the transcript
+- Be conservative: if unsure, use a LOW confidence score rather than omitting or inflating it
+- Use the exact speaker names from the transcript
+
+Return ONLY the JSON, no additional text."""
+
+    try:
+        raw_response = call_gemini_with_retry(
+            contents=intelligence_prompt,
+            response_mime_type="application/json",
+        )
+        
+        # Defensive cleanup in case the model wraps the JSON in markdown fences
+        cleaned = raw_response.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("```")[1]
+            if cleaned.startswith("json"):
+                cleaned = cleaned[4:]
+            cleaned = cleaned.strip()
+
+        try:
+            intelligence = json.loads(cleaned)
+            return intelligence
+        except json.JSONDecodeError as e:
+            print(f"⚠️ Could not parse Gemini's intelligence response as JSON: {e}")
+            print(f"Raw response was:\n{raw_response}")
+            return {"decisions": [], "action_items": [], "risks": [], "questions": [],
+                    "summary": "Meeting intelligence extraction failed"}
+    except Exception as e:
+        print(f"⚠️ Meeting intelligence extraction failed: {e}")
+        return {"decisions": [], "action_items": [], "risks": [], "questions": [],
+                "summary": "Meeting intelligence extraction failed"}
+
+
+def _review_flag(confidence):
+    return " ⚠ NEEDS REVIEW" if confidence < CONFIDENCE_REVIEW_THRESHOLD else ""
+
+
+def display_meeting_intelligence(intelligence):
+    print("\n" + "=" * 60)
+    print("🧠 MEETING INTELLIGENCE")
+    print("=" * 60)
+
+    print(f"\n📋 Meeting Summary:\n   {intelligence.get('summary', 'No summary available')}")
+
+    for label, icon, key, fields in [
+        ("Decisions Made", "✅", "decisions", ["decision", "speaker", "context"]),
+        ("Action Items", "📝", "action_items", ["action", "assignee", "deadline", "priority"]),
+        ("Risks/Concerns", "⚠️", "risks", ["risk", "speaker", "severity"]),
+        ("Questions", "❓", "questions", ["question", "speaker", "answered", "answer_summary"]),
+    ]:
+        items = intelligence.get(key, [])
+        if items:
+            print(f"\n{icon} {label} ({len(items)}):")
+            for i, item in enumerate(items, 1):
+                confidence = item.get('confidence', 0)
+                print(f"   {i}. {item.get(fields[0], 'N/A')}{_review_flag(confidence)}")
+                for f in fields[1:]:
+                    if item.get(f):
+                        print(f"      {f.replace('_', ' ').title()}: {item.get(f)}")
+                print(f"      Confidence: {confidence:.2f}")
+        else:
+            print(f"\n{icon} No {label.lower()} identified")
+
+    print("\n" + "=" * 60)
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def run_meeting(duration_seconds=30, generate_documents=True, save_to_db=True, meeting_title=None):
+    audio_file = record_meeting_audio(duration_seconds)
+
+    segments = transcribe_diarize_translate(audio_file)
+
+    print("\n" + "=" * 50)
+    print("📋 SPEAKER-LABELED, TRANSLATED TRANSCRIPT")
+    print("=" * 50)
+    for seg in segments:
+        print(f"\n[{seg['speaker']}] ({seg['start_time']}-{seg['end_time']}) [{seg.get('language', '?')}]")
+        print(f"  Original:    {seg['original_text']}")
+        print(f"  Translation: {seg['translated_text']}")
+
+    unique_speakers = list({seg['speaker'] for seg in segments}) or ["UNKNOWN"]
+    full_transcript = "\n".join(f"[{seg['speaker']}] {seg['translated_text']}" for seg in segments)
+
+    intelligence = extract_meeting_intelligence(full_transcript, unique_speakers)
+    display_meeting_intelligence(intelligence)
+
+    # Phase 9: Generate meeting documents
+    doc_results = {}
+    if generate_documents:
+        print("\n" + "=" * 50)
+        print("📄 GENERATING MEETING DOCUMENTS")
+        print("=" * 50)
+        
+        doc_generator = MoMGenerator()
+        
+        # Prepare meeting data for document generation
+        meeting_data = {
+            "date": time_module.strftime("%B %d, %Y"),
+            "time": time_module.strftime("%I:%M %p"),
+            "duration": f"{duration_seconds} seconds",
+            "attendees": unique_speakers,
+            "summary": intelligence.get('summary', 'No summary available'),
+            "transcript": segments,
+            "intelligence": intelligence
+        }
+        
+        try:
+            doc_results = doc_generator.generate_both(meeting_data)
+            print(f"\n✅ Documents generated successfully!")
+            print(f"📄 PDF: {doc_results['pdf']}")
+            print(f"📝 Word: {doc_results['word']}")
+        except Exception as e:
+            print(f"⚠️ Document generation failed: {e}")
+
+    # Phase 10: Save to database
+    meeting_id = None
+    if save_to_db:
+        print("\n" + "=" * 50)
+        print("💾 SAVING TO DATABASE")
+        print("=" * 50)
+        
+        try:
+            db = MeetingDatabase()
+            
+            # Prepare meeting data for database
+            db_meeting_data = {
+                "title": meeting_title or f"Meeting on {time_module.strftime('%B %d, %Y')}",
+                "date": time_module.strftime("%Y-%m-%d"),
+                "time": time_module.strftime("%H:%M"),
+                "duration": duration_seconds,
+                "audio_file_path": audio_file,
+                "transcript": segments,
+                "intelligence": intelligence,
+                "documents": doc_results
+            }
+            
+            meeting_id = db.save_meeting(db_meeting_data)
+            print(f"✅ Meeting saved to database (ID: {meeting_id})")
+            
+            db.close()
+        except Exception as e:
+            print(f"⚠️ Database save failed: {e}")
+
+    return {
+        "audio_file": audio_file,
+        "segments": segments,
+        "intelligence": intelligence,
+        "documents": doc_results,
+        "meeting_id": meeting_id
+    }
+
+
+if __name__ == "__main__":
+    import sys
+    
+    duration = int(sys.argv[1]) if len(sys.argv) > 1 else 30
+    generate_docs = sys.argv[2].lower() == 'true' if len(sys.argv) > 2 else True
+    save_db = sys.argv[3].lower() == 'true' if len(sys.argv) > 3 else True
+    meeting_title = sys.argv[4] if len(sys.argv) > 4 else None
+    
+    print("🎙️  AI Minutes of Meeting — Gemini-native pipeline")
+    print("=" * 50)
+    print(f"Recording will start in 2 seconds, duration: {duration}s")
+    print(f"Document generation: {'enabled' if generate_docs else 'disabled'}")
+    print(f"Database save: {'enabled' if save_db else 'disabled'}")
+    if meeting_title:
+        print(f"Meeting title: {meeting_title}")
+    time_module.sleep(2)
+    run_meeting(
+        duration_seconds=duration,
+        generate_documents=generate_docs,
+        save_to_db=save_db,
+        meeting_title=meeting_title
+    )

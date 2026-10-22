@@ -47,7 +47,8 @@ export function useProcessAudio() {
       const response = await fetch(`${apiBaseUrl}/api/meetings/process`, {
         method: 'POST',
         body,
-        credentials: 'include',
+        // credentials: 'include',
+        credentials: 'omit',
       });
       if (!response.ok) {
         const responseText = await response.text();

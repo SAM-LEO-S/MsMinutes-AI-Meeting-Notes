@@ -165,6 +165,12 @@ function friendlyProcessingError(error: unknown): string {
   if (/api.?key|unauthoriz|permission|forbidden/i.test(message)) {
     return "Gemini could not authorize the request. Check the Gemini API key and API access in project secrets.";
   }
+  if (/overloaded|503/i.test(message)) {
+    return "Gemini service is currently overloaded. Please wait a few minutes and try again.";
+  }
+  if (/timeout|504/i.test(message)) {
+    return "Gemini request timed out. Try with a shorter recording or wait a moment.";
+  }
   if (message.startsWith("Gemini ") || message.startsWith("Choose ")) {
     return message;
   }
@@ -232,20 +238,26 @@ router.post("/meetings", async (req, res): Promise<void> => {
   res.status(201).json(CreateMeetingResponse.parse(meetingResponse(row)));
 });
 
-router.get("/dashboard", async (_req, res): Promise<void> => {
-  const rows = await db.select().from(meetingsTable);
-  const totalSeconds = rows.reduce((sum, meeting) => sum + meeting.durationSeconds, 0);
-  const overview = GetDashboardResponse.parse({
-    totalMeetings: rows.length,
-    totalMinutes: Math.floor(totalSeconds / 60),
-    actionItems: rows.reduce((sum, meeting) => sum + meeting.intelligence.actionItems.length, 0),
-    reviewCount: rows.filter(needsReview).length,
-    recentMeetings: [...rows]
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .slice(0, 5)
-      .map(summaryResponse),
-  });
-  res.json(overview);
+router.get("/dashboard", async (req, res): Promise<void> => {
+  try {
+    const rows = await db.select().from(meetingsTable);
+    const totalSeconds = rows.reduce((sum, meeting) => sum + meeting.durationSeconds, 0);
+    const overview = GetDashboardResponse.parse({
+      totalMeetings: rows.length,
+      totalMinutes: Math.floor(totalSeconds / 60),
+      actionItems: rows.reduce((sum, meeting) => sum + meeting.intelligence.actionItems.length, 0),
+      reviewCount: rows.filter(needsReview).length,
+      recentMeetings: [...rows]
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, 5)
+        .map(summaryResponse),
+    });
+    res.json(overview);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    req.log.error({ error: errorMessage, stack: error instanceof Error ? error.stack : undefined }, "Dashboard query failed");
+    res.status(500).json({ error: "Failed to load dashboard data", details: errorMessage });
+  }
 });
 
 router.get("/meetings/:id", async (req, res): Promise<void> => {

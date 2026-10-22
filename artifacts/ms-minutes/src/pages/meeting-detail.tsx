@@ -48,6 +48,8 @@ export default function MeetingDetailPage() {
   const [downloadBusy, setDownloadBusy] = useState('');
   const [downloadError, setDownloadError] = useState('');
   const [savedMessage, setSavedMessage] = useState('');
+  const [transcriptPage, setTranscriptPage] = useState(1);
+  const TRANSCRIPT_PAGE_SIZE = 10;
   const initializedId = useRef<number | null>(null);
   const meeting = meetingQuery.data;
 
@@ -57,6 +59,7 @@ export default function MeetingDetailPage() {
       setTitle(meeting.title);
       setTranscript(meeting.transcript);
       setIntelligence(meeting.intelligence);
+      setTranscriptPage(1);
     }
   }, [meeting]);
 
@@ -150,20 +153,55 @@ export default function MeetingDetailPage() {
           <div className="divide-y divide-border/65">
             {transcript.length === 0 ? (
               <div className="px-6 py-16 text-center"><FileText size={24} className="mx-auto mb-3 text-muted-foreground" /><h3 className="font-semibold">No transcript segments yet</h3><p className="mt-1 text-xs text-muted-foreground">This meeting’s original audio may not have produced transcript text.</p></div>
-            ) : transcript.map((segment, index) => (
-              <article key={`${segment.startTime}-${index}`} className="px-5 py-5 sm:px-7" data-testid={`segment-transcript-${index}`}>
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <label className="sr-only" htmlFor={`speaker-${index}`}>Speaker name</label>
-                  <input id={`speaker-${index}`} value={segment.speaker} onChange={(event) => setSegment(index, 'speaker', event.target.value)} className="h-7 max-w-36 rounded-full bg-indigo-100 px-2.5 text-[10px] font-bold text-indigo-800 outline-none focus:ring-2 focus:ring-primary/35 dark:bg-indigo-950 dark:text-indigo-200" data-testid={`input-speaker-${index}`} />
-                  <span className="inline-flex items-center gap-1 font-mono text-[10px] text-muted-foreground"><Clock3 size={11} />{time(segment.startTime)}–{time(segment.endTime)}</span>
-                   <span className={`ml-auto rounded-full px-2 py-1 text-[9px] font-bold ${segment.confidence < .6 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'}`}>{confidenceLabel(segment.confidence)}</span>
-                </div>
-                <label className="mb-1 block text-[9px] font-bold uppercase tracking-[.12em] text-muted-foreground" htmlFor={`original-${index}`}>Original · {segment.language === 'ta' ? 'Tamil' : segment.language === 'en' ? 'English' : 'Mixed'}</label>
-                <textarea id={`original-${index}`} value={segment.originalText} onChange={(event) => setSegment(index, 'originalText', event.target.value)} rows={Math.max(2, Math.min(5, Math.ceil(segment.originalText.length / 85)))} className="w-full resize-y rounded-xl border border-transparent bg-transparent px-2 py-1.5 text-[13px] leading-6 outline-none transition focus:border-primary/30 focus:bg-background/55" data-testid={`textarea-original-${index}`} />
-                <label className="mb-1 mt-2 block text-[9px] font-bold uppercase tracking-[.12em] text-primary" htmlFor={`translated-${index}`}>Translation · English</label>
-                <textarea id={`translated-${index}`} value={segment.translatedText} onChange={(event) => setSegment(index, 'translatedText', event.target.value)} rows={Math.max(2, Math.min(5, Math.ceil(segment.translatedText.length / 85)))} className="w-full resize-y rounded-xl border border-transparent bg-indigo-50/55 px-2 py-1.5 text-[13px] leading-6 outline-none transition focus:border-primary/30 focus:bg-indigo-50/90 dark:bg-indigo-950/25 dark:focus:bg-indigo-950/45" data-testid={`textarea-translated-${index}`} />
-              </article>
-            ))}
+            ) : (
+              <>
+                {transcript
+                  .slice((transcriptPage - 1) * TRANSCRIPT_PAGE_SIZE, transcriptPage * TRANSCRIPT_PAGE_SIZE)
+                  .map((segment, index) => {
+                    const actualIndex = (transcriptPage - 1) * TRANSCRIPT_PAGE_SIZE + index;
+                    return (
+                      <article key={`${segment.startTime}-${actualIndex}`} className="px-5 py-5 sm:px-7" data-testid={`segment-transcript-${actualIndex}`}>
+                        <div className="mb-3 flex flex-wrap items-center gap-2">
+                          <label className="sr-only" htmlFor={`speaker-${actualIndex}`}>Speaker name</label>
+                          <input id={`speaker-${actualIndex}`} value={segment.speaker} onChange={(event) => setSegment(actualIndex, 'speaker', event.target.value)} className="h-7 max-w-36 rounded-full bg-indigo-100 px-2.5 text-[10px] font-bold text-indigo-800 outline-none focus:ring-2 focus:ring-primary/35 dark:bg-indigo-950 dark:text-indigo-200" data-testid={`input-speaker-${actualIndex}`} />
+                          <span className="inline-flex items-center gap-1 font-mono text-[10px] text-muted-foreground"><Clock3 size={11} />{time(segment.startTime)}–{time(segment.endTime)}</span>
+                           <span className={`ml-auto rounded-full px-2 py-1 text-[9px] font-bold ${segment.confidence < .6 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'}`}>{confidenceLabel(segment.confidence)}</span>
+                        </div>
+                        <label className="mb-1 block text-[9px] font-bold uppercase tracking-[.12em] text-muted-foreground" htmlFor={`original-${actualIndex}`}>Original · {segment.language === 'ta' ? 'Tamil' : segment.language === 'en' ? 'English' : 'Mixed'}</label>
+                        <textarea id={`original-${actualIndex}`} value={segment.originalText} onChange={(event) => setSegment(actualIndex, 'originalText', event.target.value)} rows={Math.max(2, Math.min(5, Math.ceil(segment.originalText.length / 85)))} className="w-full resize-y rounded-xl border border-transparent bg-transparent px-2 py-1.5 text-[13px] leading-6 outline-none transition focus:border-primary/30 focus:bg-background/55" data-testid={`textarea-original-${actualIndex}`} />
+                        <label className="mb-1 mt-2 block text-[9px] font-bold uppercase tracking-[.12em] text-primary" htmlFor={`translated-${actualIndex}`}>Translation · English</label>
+                        <textarea id={`translated-${actualIndex}`} value={segment.translatedText} onChange={(event) => setSegment(actualIndex, 'translatedText', event.target.value)} rows={Math.max(2, Math.min(5, Math.ceil(segment.translatedText.length / 85)))} className="w-full resize-y rounded-xl border border-transparent bg-indigo-50/55 px-2 py-1.5 text-[13px] leading-6 outline-none transition focus:border-primary/30 focus:bg-indigo-50/90 dark:bg-indigo-950/25 dark:focus:bg-indigo-950/45" data-testid={`textarea-translated-${actualIndex}`} />
+                      </article>
+                    );
+                  })}
+                {transcript.length > TRANSCRIPT_PAGE_SIZE && (
+                  <div className="flex items-center justify-between border-t border-border/70 px-5 py-4 sm:px-7">
+                    <span className="text-xs text-muted-foreground">
+                      Showing {(transcriptPage - 1) * TRANSCRIPT_PAGE_SIZE + 1}–{Math.min(transcriptPage * TRANSCRIPT_PAGE_SIZE, transcript.length)} of {transcript.length} segments
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setTranscriptPage((p) => Math.max(1, p - 1))}
+                        disabled={transcriptPage === 1}
+                        className="rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50 hover:bg-muted"
+                      >
+                        Previous
+                      </button>
+                      <span className="flex items-center px-3 text-xs font-semibold">
+                        {transcriptPage} / {Math.ceil(transcript.length / TRANSCRIPT_PAGE_SIZE)}
+                      </span>
+                      <button
+                        onClick={() => setTranscriptPage((p) => Math.min(Math.ceil(transcript.length / TRANSCRIPT_PAGE_SIZE), p + 1))}
+                        disabled={transcriptPage === Math.ceil(transcript.length / TRANSCRIPT_PAGE_SIZE)}
+                        className="rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50 hover:bg-muted"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </section>
 

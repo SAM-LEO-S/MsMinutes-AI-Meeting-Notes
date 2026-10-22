@@ -2,6 +2,7 @@ import PDFDocument from "pdfkit";
 import {
   AlignmentType,
   Document,
+  Footer,
   HeadingLevel,
   Packer,
   Paragraph,
@@ -95,6 +96,14 @@ export function createMeetingPdf(meeting: Meeting): Promise<Buffer> {
     }
     document.fontSize(8).fillColor("#64708a")
       .text("The Word export includes both the original transcript and English translation.");
+
+    // Add watermark at the bottom of each page
+    document.on('pageAdded', () => {
+      const { height } = document.page;
+      document.fontSize(8).fillColor("#94a3b8")
+        .text("MS Minutes", 54, height - 30, { align: "center" });
+    });
+
     document.end();
   });
 }
@@ -181,6 +190,25 @@ export async function createMeetingDocx(meeting: Meeting): Promise<Buffer> {
   }
 
   return Packer.toBuffer(new Document({
-    sections: [{ properties: {}, children }],
+    sections: [{
+      properties: {},
+      children,
+      footers: {
+        default: new Footer({
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({
+                  text: "MS Minutes",
+                  color: "94a3b8",
+                  size: 16,
+                }),
+              ],
+            }),
+          ],
+        }),
+      },
+    }],
   }));
 }

@@ -3,10 +3,15 @@
 # compiled output
 dist
 tmp
+DEPLOYMENT.md
+DEPLOYMENT_SUMMARY.md
 out-tsc
 *.tsbuildinfo
 .expo
 .expo-shared
+
+# Private conversation history
+Chat.md
 
 # dependencies
 node_modules
@@ -19,6 +24,10 @@ node_modules
 *.launch
 .settings/
 *.sublime-workspace
+
+# Environment secrets
+.env*
+!.env.example
 
 # IDE - VSCode
 .vscode/*
@@ -47,3 +56,17 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Log files
+*.log
+api-server.log
+frontend.log
+
+# Devin AI
+.agents/
+.conversation/

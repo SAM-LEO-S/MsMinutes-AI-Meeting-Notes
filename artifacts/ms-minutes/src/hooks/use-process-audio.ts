@@ -43,7 +43,8 @@ export function useProcessAudio() {
     }
 
     try {
-      const response = await fetch('/api/meetings/process', {
+      const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${apiBaseUrl}/api/meetings/process`, {
         method: 'POST',
         body,
         credentials: 'include',

@@ -6,17 +6,13 @@ import { setBaseUrl } from '@workspace/api-client-react';
 
 import './index.css';
 
-// Configure API base URL for development
-// if (import.meta.env.DEV) {
-//   setBaseUrl('http://localhost:5000');
-//   console.log('API Base URL set to: http://localhost:5000');
-// }
-
-
+// Configure API base URL for development and production
 const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-
 setBaseUrl(apiBaseUrl);
-console.log('API Base URL set to:', apiBaseUrl);
+
+if (import.meta.env.DEV) {
+  console.log('API Base URL set to:', apiBaseUrl);
+}
 
 // Service worker disabled for development
 // if (import.meta.env.PROD && 'serviceWorker' in navigator) {

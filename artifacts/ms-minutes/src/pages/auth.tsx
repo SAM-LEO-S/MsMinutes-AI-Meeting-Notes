@@ -33,7 +33,7 @@ export default function AuthPage() {
 
   return (
     <main className="grid min-h-[100dvh] place-items-center bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-100 via-background to-background px-4 py-10 dark:from-indigo-950/50">
-      <section className="glass-surface w-full max-w-[440px] rounded-[30px] p-6 shadow-xl sm:p-9">
+      <section className="glass-surface min-w-0 w-full max-w-[440px] rounded-[30px] p-6 shadow-xl sm:p-9">
         <div className="mb-8 flex items-center gap-3">
           <div className="grid size-12 place-items-center rounded-2xl bg-primary text-primary-foreground"><AudioLines size={24} /></div>
           <div><p className="font-serif text-xl font-extrabold tracking-tight">Ms.Minutes</p><p className="text-xs text-muted-foreground">Your private meeting workspace</p></div>

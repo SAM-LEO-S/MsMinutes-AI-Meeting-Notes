@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
-import { AudioLines, Clock3, Headphones, Moon, Sun, Upload, PanelLeftClose, Menu, X } from 'lucide-react';
+import { AudioLines, Clock3, Headphones, LogOut, Moon, Sun, Upload, PanelLeftClose, Menu, X } from 'lucide-react';
+import { useAuth } from '@/components/auth-provider';
 
 const links = [
   { href: '/', label: 'Record & enhance', icon: Headphones },
@@ -10,6 +11,8 @@ const links = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
+  const { user, signOut } = useAuth();
+  const [signOutError, setSignOutError] = useState('');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dark, setDark] = useState(() => {
     if (typeof window === 'undefined') {
@@ -61,6 +64,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
+        <div className="mt-4 border-t border-sidebar-border/70 pt-4">
+          <p className="truncate px-3 text-[11px] text-muted-foreground" title={user?.email ?? ''}>{user?.email}</p>
+          <button type="button" onClick={() => void signOut().catch(() => setSignOutError('Could not sign out. Please try again.'))} className="mt-1 flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-xs font-semibold text-sidebar-foreground hover:bg-sidebar-accent" data-testid="button-sign-out"><LogOut size={16} />Sign out</button>
+          {signOutError && <p className="px-3 text-[10px] text-rose-700" role="alert">{signOutError}</p>}
+        </div>
         <div className="mt-auto rounded-[22px] border border-sidebar-border/75 bg-background/40 p-4">
           <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-foreground">
             <span className="size-2 rounded-full bg-emerald-500" />
@@ -104,6 +112,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Icon size={18} />{label}
             </Link>
           ))}
+          <div className="mt-2 border-t border-border px-3 pt-3">
+            <p className="truncate text-[11px] text-muted-foreground">{user?.email}</p>
+            <button type="button" onClick={() => void signOut().catch(() => setSignOutError('Could not sign out. Please try again.'))} className="flex min-h-11 items-center gap-2 text-sm font-semibold text-foreground" data-testid="button-mobile-sign-out"><LogOut size={16} />Sign out</button>
+          </div>
           <div className="mt-2 border-t border-border pt-2 text-center text-[11px] text-muted-foreground"><PanelLeftClose size={13} className="mr-1 inline" />Tap a page to continue</div>
         </div>
       )}

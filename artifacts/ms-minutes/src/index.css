@@ -331,7 +331,6 @@
   }
 
   body {
-    min-width: 320px;
     background:
       radial-gradient(ellipse at 8% 4%, hsl(229 78% 93% / 0.54), transparent 31rem),
       hsl(var(--background));

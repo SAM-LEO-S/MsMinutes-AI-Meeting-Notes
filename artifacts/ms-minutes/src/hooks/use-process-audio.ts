@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useLocation } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
 import { getGetDashboardQueryKey, getListMeetingsQueryKey } from '@workspace/api-client-react';
+import { supabase } from '@/lib/supabase';
 
 export type ProcessState = {
   stage: string;
@@ -43,12 +44,14 @@ export function useProcessAudio() {
     }
 
     try {
+      const { data: { session } } = await supabase!.auth.getSession();
+      if (!session?.access_token) throw new Error('Your session expired. Sign in again.');
       const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       const response = await fetch(`${apiBaseUrl}/api/meetings/process`, {
         method: 'POST',
         body,
-        // credentials: 'include',
         credentials: 'omit',
+        headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (!response.ok) {
         const responseText = await response.text();

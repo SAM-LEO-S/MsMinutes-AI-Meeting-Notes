@@ -6,7 +6,7 @@ import {
   type Response,
 } from "express";
 import multer from "multer";
-import { desc, eq, ilike, or } from "drizzle-orm";
+import { and, desc, eq, ilike, or } from "drizzle-orm";
 import { db, meetingsTable } from "@workspace/db";
 import {
   CreateMeetingBody,
@@ -205,10 +205,13 @@ router.get("/meetings", async (req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(meetingsTable)
-    .where(query ? or(
-      ilike(meetingsTable.title, `%${query}%`),
-      ilike(meetingsTable.summary, `%${query}%`),
-    ) : undefined)
+    .where(and(
+      eq(meetingsTable.userId, res.locals.userId as string),
+      query ? or(
+        ilike(meetingsTable.title, `%${query}%`),
+        ilike(meetingsTable.summary, `%${query}%`),
+      ) : undefined,
+    ))
     .orderBy(desc(meetingsTable.createdAt))
     .limit(200);
   res.json(ListMeetingsResponse.parse(rows.map(summaryResponse)));
@@ -228,6 +231,7 @@ router.post("/meetings", async (req, res): Promise<void> => {
   const [row] = await db
     .insert(meetingsTable)
     .values({
+      userId: res.locals.userId as string,
       title,
       durationSeconds: parsedBody.data.durationSeconds,
       summary: parsedBody.data.intelligence.summary,
@@ -240,7 +244,8 @@ router.post("/meetings", async (req, res): Promise<void> => {
 
 router.get("/dashboard", async (req, res): Promise<void> => {
   try {
-    const rows = await db.select().from(meetingsTable);
+    const rows = await db.select().from(meetingsTable)
+      .where(eq(meetingsTable.userId, res.locals.userId as string));
     const totalSeconds = rows.reduce((sum, meeting) => sum + meeting.durationSeconds, 0);
     const overview = GetDashboardResponse.parse({
       totalMeetings: rows.length,
@@ -269,7 +274,10 @@ router.get("/meetings/:id", async (req, res): Promise<void> => {
   const [row] = await db
     .select()
     .from(meetingsTable)
-    .where(eq(meetingsTable.id, params.data.id))
+    .where(and(
+      eq(meetingsTable.id, params.data.id),
+      eq(meetingsTable.userId, res.locals.userId as string),
+    ))
     .limit(1);
   if (!row) {
     res.status(404).json({ error: "Meeting not found." });
@@ -299,7 +307,10 @@ router.patch("/meetings/:id", async (req, res): Promise<void> => {
         ? { intelligence: changes.intelligence, summary: changes.intelligence.summary }
         : {}),
     })
-    .where(eq(meetingsTable.id, params.data.id))
+    .where(and(
+      eq(meetingsTable.id, params.data.id),
+      eq(meetingsTable.userId, res.locals.userId as string),
+    ))
     .returning();
   if (!row) {
     res.status(404).json({ error: "Meeting not found." });
@@ -316,7 +327,10 @@ router.delete("/meetings/:id", async (req, res): Promise<void> => {
   }
   const deleted = await db
     .delete(meetingsTable)
-    .where(eq(meetingsTable.id, params.data.id))
+    .where(and(
+      eq(meetingsTable.id, params.data.id),
+      eq(meetingsTable.userId, res.locals.userId as string),
+    ))
     .returning({ id: meetingsTable.id });
   if (deleted.length === 0) {
     res.status(404).json({ error: "Meeting not found." });
@@ -367,6 +381,7 @@ router.post("/meetings/process", attachAudio, async (req, res): Promise<void> =>
     const [row] = await db
       .insert(meetingsTable)
       .values({
+        userId: res.locals.userId as string,
         title,
         durationSeconds: analysis.durationSeconds,
         summary: analysis.intelligence.summary,
@@ -397,11 +412,11 @@ router.post("/meetings/process", attachAudio, async (req, res): Promise<void> =>
   }
 });
 
-async function loadMeeting(id: number) {
+async function loadMeeting(id: number, userId: string) {
   const [row] = await db
     .select()
     .from(meetingsTable)
-    .where(eq(meetingsTable.id, id))
+    .where(and(eq(meetingsTable.id, id), eq(meetingsTable.userId, userId)))
     .limit(1);
   return row;
 }
@@ -412,7 +427,7 @@ router.get("/meetings/:id/export/pdf", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const meeting = await loadMeeting(params.data.id);
+  const meeting = await loadMeeting(params.data.id, res.locals.userId as string);
   if (!meeting) {
     res.status(404).json({ error: "Meeting not found." });
     return;
@@ -429,7 +444,7 @@ router.get("/meetings/:id/export/docx", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const meeting = await loadMeeting(params.data.id);
+  const meeting = await loadMeeting(params.data.id, res.locals.userId as string);
   if (!meeting) {
     res.status(404).json({ error: "Meeting not found." });
     return;

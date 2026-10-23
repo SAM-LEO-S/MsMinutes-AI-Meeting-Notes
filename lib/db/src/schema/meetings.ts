@@ -1,4 +1,5 @@
-import { integer, jsonb, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { integer, jsonb, pgPolicy, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export type TranscriptSegment = {
   speaker: string;
@@ -50,13 +51,38 @@ export type MeetingIntelligence = {
 
 export const meetingsTable = pgTable("meetings", {
   id: serial("id").primaryKey(),
+  // Nullable only to preserve existing meetings during the auth rollout.
+  // New API-created meetings always receive the verified Supabase user ID.
+  userId: varchar("user_id", { length: 255 }),
   title: varchar("title", { length: 160 }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   durationSeconds: integer("duration_seconds").notNull().default(0),
   summary: text("summary").notNull(),
   transcript: jsonb("transcript").$type<TranscriptSegment[]>().notNull(),
   intelligence: jsonb("intelligence").$type<MeetingIntelligence>().notNull(),
-});
+}, (table) => [
+  pgPolicy("meetings_select_own", {
+    for: "select",
+    to: "authenticated",
+    using: sql`(select auth.uid())::text = ${table.userId}`,
+  }),
+  pgPolicy("meetings_insert_own", {
+    for: "insert",
+    to: "authenticated",
+    withCheck: sql`(select auth.uid())::text = ${table.userId}`,
+  }),
+  pgPolicy("meetings_update_own", {
+    for: "update",
+    to: "authenticated",
+    using: sql`(select auth.uid())::text = ${table.userId}`,
+    withCheck: sql`(select auth.uid())::text = ${table.userId}`,
+  }),
+  pgPolicy("meetings_delete_own", {
+    for: "delete",
+    to: "authenticated",
+    using: sql`(select auth.uid())::text = ${table.userId}`,
+  }),
+]).enableRLS();
 
 export type Meeting = typeof meetingsTable.$inferSelect;
 export type InsertMeeting = typeof meetingsTable.$inferInsert;

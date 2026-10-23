@@ -1,0 +1,5 @@
+ALTER TABLE "meetings" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "meetings_select_own" ON "meetings" AS PERMISSIVE FOR SELECT TO "authenticated" USING ((select auth.uid())::text = "meetings"."user_id");--> statement-breakpoint
+CREATE POLICY "meetings_insert_own" ON "meetings" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ((select auth.uid())::text = "meetings"."user_id");--> statement-breakpoint
+CREATE POLICY "meetings_update_own" ON "meetings" AS PERMISSIVE FOR UPDATE TO "authenticated" USING ((select auth.uid())::text = "meetings"."user_id") WITH CHECK ((select auth.uid())::text = "meetings"."user_id");--> statement-breakpoint
+CREATE POLICY "meetings_delete_own" ON "meetings" AS PERMISSIVE FOR DELETE TO "authenticated" USING ((select auth.uid())::text = "meetings"."user_id");

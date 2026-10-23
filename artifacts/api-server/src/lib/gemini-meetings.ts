@@ -966,6 +966,9 @@ export async function analyzeMeetingAudio(
 
       let parsedSegments: any[] = [];
       try {
+        if (!uploaded.uri) {
+          throw new Error("Gemini uploaded the audio chunk without returning a file URI.");
+        }
         // Uses fallback stack rotation
         parsedSegments = await runChunkWithFallback(
           client,

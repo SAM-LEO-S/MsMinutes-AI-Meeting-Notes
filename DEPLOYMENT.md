@@ -151,6 +151,8 @@ MsMinutes-AI-Meeting-Notes/
 ```bash
 PORT=5000
 DATABASE_URL=postgresql://[user]:[password]@[host]:[port]/[database]
+SUPABASE_URL=https://[project-ref].supabase.co
+SUPABASE_PUBLISHABLE_KEY=[Supabase publishable key]
 GEMINI_API_KEY=your-gemini-api-key
 ```
 
@@ -158,6 +160,8 @@ GEMINI_API_KEY=your-gemini-api-key
 
 ```bash
 VITE_API_URL=https://your-backend.onrender.com
+VITE_SUPABASE_URL=https://[project-ref].supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=[Supabase publishable key]
 ```
 
 ### For Development (Local)
@@ -166,7 +170,15 @@ VITE_API_URL=https://your-backend.onrender.com
 PORT=5000
 DATABASE_URL=postgresql://cr2506:cr2506@localhost:5432/msminutes
 GEMINI_API_KEY=your-gemini-api-key
+SUPABASE_URL=https://[project-ref].supabase.co
+SUPABASE_PUBLISHABLE_KEY=[Supabase publishable key]
+VITE_SUPABASE_URL=https://[project-ref].supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=[Supabase publishable key]
 ```
+
+In Supabase, enable email confirmations under **Authentication > Providers > Email** and add the Vercel production URL plus local development URL to **Authentication > URL Configuration**. Supabase Auth stores the account email and the submitted full name in its protected `auth.users` record; the application does not store passwords. The publishable key is intended for browser use. Never put a Supabase secret/service-role key in Vercel or frontend code.
+
+The meetings migration adds an owner column and enables RLS policies. Existing meetings have no owner, so they remain inaccessible after sign-in until you explicitly assign them to the right account. Do not assign legacy meetings to a new user automatically.
 
 ## Deployment Steps
 
@@ -236,7 +248,7 @@ git push origin main
 1. Create project on Vercel
 2. Connect GitHub repo
 3. Configure as shown above
-4. Add VITE_API_URL environment variable
+4. Add `VITE_API_URL`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_PUBLISHABLE_KEY` environment variables
 5. Deploy
 
 ### Step 7: Update Frontend API URL

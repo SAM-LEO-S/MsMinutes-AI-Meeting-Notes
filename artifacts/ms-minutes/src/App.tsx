@@ -9,6 +9,8 @@ import HomePage from '@/pages/home';
 import UploadPage from '@/pages/upload';
 import HistoryPage from '@/pages/history';
 import MeetingDetailPage from '@/pages/meeting-detail';
+import AuthPage from '@/pages/auth';
+import { AuthProvider, useAuth } from '@/components/auth-provider';
 import {
   Route,
   Switch,
@@ -19,6 +21,11 @@ import {
 const queryClient = new QueryClient();
 
 function Router() {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return <div className="grid min-h-[100dvh] place-items-center text-sm text-muted-foreground">Restoring your private workspace…</div>;
+  }
+  if (!user) return <AuthPage />;
   return (
     <AppShell>
       <RoutedErrorBoundary>
@@ -42,12 +49,14 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+            <Router />
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

@@ -173,7 +173,8 @@ export const CreateMeetingResponse = zod.object({
   "answerSummary": zod.string().nullable(),
   "confidence": zod.number().min(createMeetingResponseIntelligenceQuestionsItemConfidenceMin).max(createMeetingResponseIntelligenceQuestionsItemConfidenceMax)
 }))
-})
+}),
+  "audioUrl": zod.string().optional()
 })
 
 
@@ -267,7 +268,8 @@ export const GetMeetingResponse = zod.object({
   "answerSummary": zod.string().nullable(),
   "confidence": zod.number().min(getMeetingResponseIntelligenceQuestionsItemConfidenceMin).max(getMeetingResponseIntelligenceQuestionsItemConfidenceMax)
 }))
-})
+}),
+  "audioUrl": zod.string().optional()
 })
 
 
@@ -410,7 +412,8 @@ export const UpdateMeetingResponse = zod.object({
   "answerSummary": zod.string().nullable(),
   "confidence": zod.number().min(updateMeetingResponseIntelligenceQuestionsItemConfidenceMin).max(updateMeetingResponseIntelligenceQuestionsItemConfidenceMax)
 }))
-})
+}),
+  "audioUrl": zod.string().optional()
 })
 
 

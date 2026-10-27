@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type { Session, User } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
 import { setAuthTokenGetter } from '@workspace/api-client-react';
-import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { getInitialAuthSession, isSupabaseConfigured, supabase } from '@/lib/supabase';
 
 type AuthContextValue = {
   user: User | null;
@@ -24,10 +24,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const client = supabase;
     if (!client) return;
     let mounted = true;
-    void client.auth.getSession().then(({ data, error }) => {
+    void getInitialAuthSession().then((initialSession) => {
       if (!mounted) return;
-      if (error) console.error('Unable to restore Supabase session:', error.message);
-      setSession(data.session);
+      setSession(initialSession);
+      setLoading(false);
+    }).catch((error: unknown) => {
+      if (!mounted) return;
+      console.error('Unable to restore Supabase session:', error instanceof Error ? error.message : error);
+      setSession(null);
       setLoading(false);
     });
     const { data: { subscription } } = client.auth.onAuthStateChange((event, nextSession) => {

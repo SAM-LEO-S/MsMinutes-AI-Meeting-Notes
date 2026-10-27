@@ -171,9 +171,11 @@ importers:
       '@google/genai':
         specifier: ^2.29.0
         version: 2.29.0
+
       '@supabase/supabase-js':
         specifier: ^2.118.0
         version: 2.118.0
+
       '@swc/helpers':
         specifier: ^0.5.23
         version: 0.5.23

@@ -16,6 +16,9 @@ const basePath = process.env.BASE_PATH || '/';
 
 export default defineConfig({
   base: basePath,
+  // Keep frontend env loading aligned with the workspace-root .env.local used by
+  // the API and documented local setup.
+  envDir: path.resolve(import.meta.dirname, '../..'),
 
 plugins: [
   react(),

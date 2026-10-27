@@ -60,6 +60,7 @@ export const meetingsTable = pgTable("meetings", {
   summary: text("summary").notNull(),
   transcript: jsonb("transcript").$type<TranscriptSegment[]>().notNull(),
   intelligence: jsonb("intelligence").$type<MeetingIntelligence>().notNull(),
+  audioUrl: text("audio_url"),
 }, (table) => [
   pgPolicy("meetings_select_own", {
     for: "select",

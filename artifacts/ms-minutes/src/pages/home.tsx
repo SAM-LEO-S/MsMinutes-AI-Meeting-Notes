@@ -3,6 +3,7 @@ import { useGetDashboard, getHealthCheckQueryKey, useHealthCheck } from '@worksp
 import { AudioLines, Check, Clock3, FileAudio2, Mic, Pause, Play, ShieldCheck, Sparkles, TriangleAlert, Upload } from 'lucide-react';
 import { Link } from 'wouter';
 import { PageHeading } from '@/components/app-shell';
+import { AudioPlayer } from '@/components/AudioPlayer';
 import { useProcessAudio } from '@/hooks/use-process-audio';
 
 function formatDuration(seconds: number) {
@@ -18,13 +19,11 @@ export default function HomePage() {
   const [audioUrl, setAudioUrl] = useState('');
   const [title, setTitle] = useState('');
   const [recordError, setRecordError] = useState('');
-  const [playing, setPlaying] = useState(false);
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const chunks = useRef<Blob[]>([]);
-  const audioRef = useRef<HTMLAudioElement>(null);
   const [waveHeights, setWaveHeights] = useState(() =>
     Array.from({ length: 48 }, (_, index) => 10 + ((index * 7) % 9)),
   );
@@ -168,19 +167,6 @@ export default function HomePage() {
     setRecording(false);
   };
 
-  const togglePlayback = async () => {
-    if (!audioRef.current) {
-      return;
-    }
-    if (playing) {
-      audioRef.current.pause();
-      setPlaying(false);
-    } else {
-      await audioRef.current.play();
-      setPlaying(true);
-    }
-  };
-
   return (
     <div className="mx-auto max-w-[1050px]">
       <PageHeading
@@ -224,12 +210,12 @@ export default function HomePage() {
           </div>
 
           {audioBlob && (
-            <div className="mt-4 flex items-center gap-3 rounded-2xl bg-muted/65 p-3">
-              <button onClick={togglePlayback} className="grid size-11 shrink-0 place-items-center rounded-xl bg-background text-foreground shadow-sm" data-testid="button-preview-recording" aria-label={playing ? 'Pause recording' : 'Play recording'}>
-                {playing ? <Pause size={17} /> : <Play size={17} />}
-              </button>
-              <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">Your recording</p><p className="text-[11px] text-muted-foreground">{formatDuration(elapsed)} · Ready to process</p></div>
-              <audio ref={audioRef} src={audioUrl} onEnded={() => setPlaying(false)} className="hidden" />
+            <div className="mt-4">
+              <AudioPlayer 
+                src={audioUrl} 
+                title={`Recording Preview - ${title || 'Untitled'}`}
+                className="w-full"
+              />
             </div>
           )}
 

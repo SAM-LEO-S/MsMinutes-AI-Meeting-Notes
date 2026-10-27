@@ -300,6 +300,8 @@ components:
             $ref: "#/components/schemas/TranscriptSegment"
         intelligence:
           $ref: "#/components/schemas/MeetingIntelligence"
+        audioUrl:
+          type: string
       required: [id, title, createdAt, durationSeconds, summary, transcript, intelligence]
     MeetingSummary:
       type: object

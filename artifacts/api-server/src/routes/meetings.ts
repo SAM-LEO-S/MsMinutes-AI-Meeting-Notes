@@ -31,6 +31,7 @@ import {
   type MeetingProgress,
 } from "../lib/gemini-meetings";
 import { createMeetingDocx, createMeetingPdf } from "../lib/meeting-documents";
+import { uploadMeetingAudio } from "../lib/supabase-storage";
 
 const router: IRouter = Router();
 const MAX_AUDIO_BYTES = 50 * 1024 * 1024;
@@ -83,7 +84,7 @@ type SseEvent = MeetingProgress & {
 };
 
 function meetingResponse(row: MeetingRow) {
-  return GetMeetingResponse.parse({
+  const response: any = {
     id: row.id,
     title: row.title,
     createdAt: row.createdAt.toISOString(),
@@ -91,7 +92,13 @@ function meetingResponse(row: MeetingRow) {
     summary: row.summary,
     transcript: row.transcript,
     intelligence: row.intelligence,
-  });
+  };
+  
+  if (row.audioUrl) {
+    response.audioUrl = row.audioUrl;
+  }
+  
+  return GetMeetingResponse.parse(response);
 }
 
 function needsReview(row: MeetingRow): boolean {
@@ -378,6 +385,7 @@ router.post("/meetings/process", attachAudio, async (req, res): Promise<void> =>
       message: "Adding the transcript and insights to meeting history",
     });
     const title = parsedBody.data.title?.trim() || `Meeting on ${new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date())}`;
+    
     const [row] = await db
       .insert(meetingsTable)
       .values({
@@ -389,6 +397,54 @@ router.post("/meetings/process", attachAudio, async (req, res): Promise<void> =>
         intelligence: analysis.intelligence,
       })
       .returning();
+    
+    // Upload audio to Supabase storage after meeting ID is known
+    let audioUrl: string | null = null;
+    try {
+      sendProgress(res, {
+        stage: "Uploading audio",
+        progress: 94,
+        message: "Storing audio for playback",
+      });
+      audioUrl = await uploadMeetingAudio(
+        res.locals.userId as string,
+        row.id,
+        req.file.buffer,
+        normalizeAudioMimeType(req.file.mimetype, req.file.originalname),
+        req.file.originalname
+      );
+      
+      if (audioUrl) {
+        await db
+          .update(meetingsTable)
+          .set({ audioUrl })
+          .where(eq(meetingsTable.id, row.id));
+        
+        // Refetch the row to get the updated audioUrl
+        const [updatedRow] = await db
+          .select()
+          .from(meetingsTable)
+          .where(eq(meetingsTable.id, row.id))
+          .limit(1);
+        
+        if (updatedRow) {
+          const meeting = meetingResponse(updatedRow);
+          sendProgress(res, {
+            stage: "Minutes are ready",
+            progress: 100,
+            message: "Your meeting has been saved",
+            meeting,
+          });
+          res.write("data: [DONE]\n\n");
+          res.end();
+          return;
+        }
+      }
+    } catch (uploadError) {
+      req.log.warn({ error: uploadError instanceof Error ? uploadError.message : String(uploadError) }, "Audio upload failed, continuing without audio");
+    }
+    
+    // Fallback: Send response without audio if upload failed
     const meeting = meetingResponse(row);
     sendProgress(res, {
       stage: "Minutes are ready",

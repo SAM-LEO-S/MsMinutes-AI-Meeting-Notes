@@ -15,6 +15,7 @@ import type { MeetingIntelligence, TranscriptSegment } from '@workspace/api-clie
 import { ArrowLeft, Check, ChevronDown, CircleHelp, Clock3, Download, FileText, LoaderCircle, Save, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
 import { Link } from 'wouter';
 import { PageHeading } from '@/components/app-shell';
+import { AudioPlayer } from '@/components/AudioPlayer';
 
 function time(seconds: number) {
   return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
@@ -60,6 +61,7 @@ export default function MeetingDetailPage() {
       setTranscript(meeting.transcript);
       setIntelligence(meeting.intelligence);
       setTranscriptPage(1);
+      console.log('[Meeting Detail] Audio URL:', meeting.audioUrl);
     }
   }, [meeting]);
 
@@ -139,6 +141,22 @@ export default function MeetingDetailPage() {
         </div>}
       />
       {downloadError && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200" role="alert" data-testid="status-export-error">{downloadError}</p>}
+
+      {meeting.audioUrl ? (
+        <div className="mb-5">
+          <AudioPlayer 
+            src={meeting.audioUrl} 
+            title={`${title || meeting.title} - Original Audio`}
+            className="w-full"
+          />
+        </div>
+      ) : (
+        <div className="mb-5 glass-surface rounded-2xl border border-dashed border-border/70 p-4 text-center">
+          <p className="text-xs text-muted-foreground">
+            No audio file found in database
+          </p>
+        </div>
+      )}
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(290px,.75fr)]">
         <section className="glass-surface overflow-hidden rounded-[28px]">

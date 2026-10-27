@@ -152,6 +152,7 @@ export interface Meeting {
   summary: string;
   transcript: TranscriptSegment[];
   intelligence: MeetingIntelligence;
+  audioUrl?: string;
 }
 
 export interface MeetingSummary {

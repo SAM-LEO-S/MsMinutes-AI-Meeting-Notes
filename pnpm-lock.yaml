@@ -171,6 +171,9 @@ importers:
       '@google/genai':
         specifier: ^2.29.0
         version: 2.29.0
+      '@supabase/supabase-js':
+        specifier: ^2.118.0
+        version: 2.118.0
       '@swc/helpers':
         specifier: ^0.5.23
         version: 0.5.23
@@ -238,6 +241,9 @@ importers:
       '@types/pdfkit':
         specifier: ^0.17.6
         version: 0.17.6
+      dotenv:
+        specifier: ^18.0.9
+        version: 18.0.9
       esbuild:
         specifier: 0.28.2
         version: 0.28.2
@@ -1914,6 +1920,11 @@ packages:
 
   dom-helpers@5.2.1:
     resolution: {integrity: sha512-nRCa7CK3VTrM2NmGkIy4cbK7IZlgBE/PYMn55rrXefr5xXDP0LdtfPnblFDoVdcAfslJ7or6iqAUnx0CCGIWQA==}
+
+  dotenv@18.0.9:
+    resolution: {integrity: sha512-3fVOW4cB02R066PUSwn8O4TJyz9NckQl7F81blIbaq9jKBm2tSmOKky7ZHIXzGvkVPXCSn6jkpziBPZdGFs8Tw==}
+    engines: {node: '>=12'}
+    hasBin: true
 
   drizzle-kit@0.31.10:
     resolution: {integrity: sha512-7OZcmQUrdGI+DUNNsKBn1aW8qSoKuTH7d0mYgSP8bAzdFzKoovxEFnoGQp2dVs82EOJeYycqRtciopszwUf8bw==}
@@ -4829,6 +4840,8 @@ snapshots:
     dependencies:
       '@babel/runtime': 7.29.7
       csstype: 3.2.3
+
+  dotenv@18.0.9: {}
 
   drizzle-kit@0.31.10:
     dependencies:

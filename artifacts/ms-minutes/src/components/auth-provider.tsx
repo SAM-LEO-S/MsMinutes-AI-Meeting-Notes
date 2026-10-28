@@ -61,10 +61,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     async signUp(email, password, fullName) {
       if (!supabase) throw new Error('Supabase Auth is not configured.');
+      const appUrl = import.meta.env.VITE_APP_URL;
+      const redirectUrl = appUrl || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName.trim() } },
+        options: {
+          data: { full_name: fullName.trim() },
+          emailRedirectTo: redirectUrl,
+        },
       });
       if (error) throw error;
       return !data.session;

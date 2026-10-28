@@ -27,6 +27,14 @@ if (typeof window !== 'undefined' && window.location.hash) {
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+// Determine the correct redirect URL based on environment
+// In production, use VITE_APP_URL; in dev, use window.location.origin
+export const getRedirectUrl = () => {
+  const appUrl = import.meta.env.VITE_APP_URL;
+  if (appUrl) return appUrl;
+  return typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+};
+
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabasePublishableKey);
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabasePublishableKey, {

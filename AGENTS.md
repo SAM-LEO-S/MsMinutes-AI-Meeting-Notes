@@ -126,6 +126,7 @@ export GEMINI_API_KEY="your-gemini-api-key"
 ```bash
 export PORT=3000
 export BASE_PATH="/"
+export VITE_APP_URL=http://localhost:3000
 ```
 
 ### Startup Commands
@@ -405,6 +406,7 @@ export GEMINI_API_KEY="your-gemini-api-key"
 ```bash
 export PORT=3000
 export BASE_PATH="/"
+export VITE_APP_URL=http://localhost:3000
 ```
 
 ### Startup Commands
@@ -563,3 +565,34 @@ For deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md) for:
 - ✅ Prompts now match Python reference implementation
 - ✅ Retry strategy now matches Python (exponential backoff with jitter)
 - ✅ Audio preprocessing implemented without external dependencies
+
+## Email Verification Redirect Fix (2026-10-28)
+
+**Problem:** Email verification links were redirecting to `localhost:3000` instead of the production URL `https://msminutes-ai-meeting-notes.vercel.app`
+
+**Root Cause:** Supabase Auth was not configured with the correct redirect URL for email confirmations. The frontend code was using `window.location.origin` which defaults to localhost in development.
+
+**Solution:**
+1. Added `VITE_APP_URL` environment variable to specify the app URL
+2. Updated `artifacts/ms-minutes/src/lib/supabase.ts` to use `VITE_APP_URL` for Supabase auth redirect configuration
+3. Updated `artifacts/ms-minutes/src/components/auth-provider.tsx` to pass the correct redirect URL during sign-up
+4. Updated `.env.example` to include `VITE_APP_URL` for both local and production
+
+**Files Modified:**
+- `artifacts/ms-minutes/src/lib/supabase.ts` - Added `getRedirectUrl()` function that uses `VITE_APP_URL`
+- `artifacts/ms-minutes/src/components/auth-provider.tsx` - Added `emailRedirectTo` option in sign-up
+- `.env.example` - Added `VITE_APP_URL` variable
+- `.env.local` - Added `VITE_APP_URL=http://localhost:3000` for local development
+- `DEPLOYMENT.md` - Added Supabase Auth URL Configuration step
+- `AGENTS.md` - Added documentation for this fix
+
+**Supabase Configuration Required:**
+After deploying to Vercel, you must configure the redirect URLs in Supabase Dashboard:
+1. Go to **Authentication** > **URL Configuration**
+2. Set **Site URL** to: `https://msminutes-ai-meeting-notes.vercel.app`
+3. Add to **Redirect URLs**: `https://msminutes-ai-meeting-notes.vercel.app/**`
+4. Click **Save**
+
+**Environment Variables:**
+- Local: `VITE_APP_URL=http://localhost:3000`
+- Production (Vercel): `VITE_APP_URL=https://msminutes-ai-meeting-notes.vercel.app`

@@ -162,6 +162,7 @@ GEMINI_API_KEY=your-gemini-api-key
 VITE_API_URL=https://your-backend.onrender.com
 VITE_SUPABASE_URL=https://[project-ref].supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=[Supabase publishable key]
+VITE_APP_URL=https://msminutes-ai-meeting-notes.vercel.app
 ```
 
 ### For Development (Local)
@@ -248,8 +249,24 @@ git push origin main
 1. Create project on Vercel
 2. Connect GitHub repo
 3. Configure as shown above
-4. Add `VITE_API_URL`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_PUBLISHABLE_KEY` environment variables
+4. Add `VITE_API_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_APP_URL` environment variables
 5. Deploy
+
+### Step 7: Configure Supabase Auth Redirect URLs
+
+**IMPORTANT:** After deploying to Vercel, you must configure the redirect URLs in Supabase:
+
+1. Go to your Supabase Dashboard
+2. Navigate to **Authentication** > **URL Configuration**
+3. Add your production URL to the **Site URL** field:
+   - `https://msminutes-ai-meeting-notes.vercel.app`
+4. Add the same URL to **Redirect URLs**:
+   - `https://msminutes-ai-meeting-notes.vercel.app/**`
+5. Click **Save**
+
+This ensures that email verification links redirect to your production app instead of localhost.
+
+### Step 8: Update Frontend API URL (if needed)
 
 ### Step 7: Update Frontend API URL
 

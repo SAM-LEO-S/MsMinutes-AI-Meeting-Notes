@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useGetDashboard, getHealthCheckQueryKey, useHealthCheck } from '@workspace/api-client-react';
-import { AudioLines, Check, Clock3, FileAudio2, Mic, Pause, Play, ShieldCheck, Sparkles, TriangleAlert, Upload } from 'lucide-react';
+import { AudioLines, Check, Clock3, FileAudio2, Mic, Pause, Play, RotateCcw, ShieldCheck, Sparkles, TriangleAlert, Upload } from 'lucide-react';
 import { Link } from 'wouter';
 import { PageHeading } from '@/components/app-shell';
 import { AudioPlayer } from '@/components/AudioPlayer';
@@ -14,6 +14,7 @@ export default function HomePage() {
   const dashboard = useGetDashboard();
   const health = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), retry: false } });
   const [recording, setRecording] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState('');
@@ -30,12 +31,12 @@ export default function HomePage() {
   const { stage, progress, error, processing, processAudio } = useProcessAudio();
 
   useEffect(() => {
-    if (!recording) {
+    if (!recording || paused) {
       return;
     }
     const timer = window.setInterval(() => setElapsed((value) => value + 1), 1000);
     return () => window.clearInterval(timer);
-  }, [recording]);
+  }, [recording, paused]);
 
   useEffect(() => () => {
     if (audioUrl) {
@@ -45,7 +46,7 @@ export default function HomePage() {
 
   useEffect(() => {
     const analyser = analyserRef.current;
-    if (!recording || !analyser) {
+    if (!recording || paused || !analyser) {
       return;
     }
     const samples = new Uint8Array(analyser.frequencyBinCount);
@@ -67,7 +68,7 @@ export default function HomePage() {
     };
     animationFrame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animationFrame);
-  }, [recording]);
+  }, [recording, paused]);
 
   const releaseMicrophone = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -165,6 +166,36 @@ export default function HomePage() {
   const stopRecording = () => {
     mediaRecorder.current?.stop();
     setRecording(false);
+    setPaused(false);
+  };
+
+  const resetRecording = () => {
+    const recorder = mediaRecorder.current;
+    if (recorder) {
+      // Clear the onstop handler to prevent blob creation
+      recorder.onstop = null;
+      recorder.stop();
+    }
+    setRecording(false);
+    setPaused(false);
+    setElapsed(0);
+    setAudioBlob(null);s
+    setAudioUrl('');
+    releaseMicrophone();
+  };
+
+  const pauseRecording = () => {
+    if (mediaRecorder.current && mediaRecorder.current.state === 'recording') {
+      mediaRecorder.current.pause();
+      setPaused(true);
+    }
+  };
+
+  const resumeRecording = () => {
+    if (mediaRecorder.current && mediaRecorder.current.state === 'paused') {
+      mediaRecorder.current.resume();
+      setPaused(false);
+    }
   };
 
   return (
@@ -194,9 +225,9 @@ export default function HomePage() {
           <label className="relative mt-5 block text-[11px] font-bold uppercase tracking-[.12em] text-muted-foreground sm:mt-7" htmlFor="meeting-title">Meeting name <span className="font-normal normal-case tracking-normal">(optional)</span></label>
           <input id="meeting-title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} placeholder="e.g. Tuesday product sync" className="relative mt-2 h-12 w-full rounded-2xl border border-border/80 bg-background/65 px-4 text-sm outline-none transition focus:border-primary/50 focus:ring-4 focus:ring-primary/10" data-testid="input-recording-title" />
 
-          <div className="mt-6 flex h-[96px] items-center justify-center gap-[5px] overflow-hidden rounded-[24px] border border-indigo-100/80 bg-indigo-50/50 px-5 dark:border-indigo-900/70 dark:bg-indigo-950/25 sm:mt-8 sm:h-[118px]" aria-label={recording ? 'Recording waveform in progress' : 'Audio waveform'} data-testid="waveform-canvas">
+          <div className="mt-6 flex h-[96px] items-center justify-center gap-[5px] overflow-hidden rounded-[24px] border border-indigo-100/80 bg-indigo-50/50 px-5 dark:border-indigo-900/70 dark:bg-indigo-950/25 sm:mt-8 sm:h-[118px]" aria-label={recording ? (paused ? 'Recording paused' : 'Recording waveform in progress') : 'Audio waveform'} data-testid="waveform-canvas">
             {Array.from({ length: 48 }, (_, index) => (
-              <span key={index} className={`wave-bar w-[3px] rounded-full bg-gradient-to-t from-indigo-400 to-blue-300 dark:from-indigo-400 dark:to-sky-300 ${recording ? 'opacity-100' : 'opacity-45'}`} style={{ height: `${waveHeights[index]}%` }} />
+              <span key={index} className={`wave-bar w-[3px] rounded-full bg-gradient-to-t from-indigo-400 to-blue-300 dark:from-indigo-400 dark:to-sky-300 ${recording && !paused ? 'opacity-100' : 'opacity-45'}`} style={{ height: `${paused ? 10 : waveHeights[index]}%` }} />
             ))}
           </div>
           <p className="mt-3 text-center text-[10px] font-medium text-muted-foreground">
@@ -204,7 +235,13 @@ export default function HomePage() {
           </p>
           <div className="mt-4 flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {recording ? <><span className="relative flex size-2"><span className="absolute size-full animate-ping rounded-full bg-rose-400 opacity-60" /><span className="relative size-2 rounded-full bg-rose-500" /></span>Recording in progress</> : audioBlob ? 'Recording ready to review' : 'Your microphone is standing by'}
+              {recording ? (
+                paused ? (
+                  <>Recording paused</>
+                ) : (
+                  <><span className="relative flex size-2"><span className="absolute size-full animate-ping rounded-full bg-rose-400 opacity-60" /><span className="relative size-2 rounded-full bg-rose-500" /></span>Recording in progress</>
+                )
+              ) : audioBlob ? 'Recording ready to review' : 'Your microphone is standing by'}
             </div>
             <span className="font-mono text-sm font-semibold tabular-nums" data-testid="text-recording-duration">{formatDuration(elapsed)}</span>
           </div>
@@ -231,16 +268,24 @@ export default function HomePage() {
 
           <div className="relative mt-4 flex flex-col gap-3 sm:mt-6 sm:flex-row">
             {recording ? (
-              <button onClick={stopRecording} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-rose-600 px-5 text-sm font-semibold text-white transition hover:bg-rose-700" data-testid="button-stop-recording"><span className="size-2.5 rounded-sm bg-white" />Finish recording</button>
+              <>
+                {paused ? (
+                  <button onClick={resumeRecording} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg shadow-indigo-900/15 transition hover:brightness-105" data-testid="button-resume-recording"><Play size={17} />Resume recording</button>
+                ) : (
+                  <button onClick={pauseRecording} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-amber-600 px-5 text-sm font-semibold text-white transition hover:bg-amber-700" data-testid="button-pause-recording"><Pause size={17} />Pause recording</button>
+                )}
+                <button onClick={stopRecording} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl border border-border bg-background/70 px-5 text-sm font-semibold hover:bg-muted" data-testid="button-stop-recording"><span className="size-2.5 rounded-sm bg-white" />Finish recording</button>
+                <button onClick={resetRecording} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl border border-border bg-background/70 px-5 text-sm font-semibold hover:bg-muted" data-testid="button-reset-recording"><RotateCcw size={16} />Reset</button>
+              </>
             ) : audioBlob ? (
               <>
                 <button onClick={() => void processAudio(audioBlob, title)} disabled={processing} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg shadow-indigo-900/15 transition hover:brightness-105 disabled:opacity-60" data-testid="button-process-recording"><Sparkles size={17} />{processing ? 'Preparing your minutes' : 'Create my minutes'}</button>
-                <button onClick={() => { setAudioBlob(null); setElapsed(0); }} className="min-h-12 rounded-2xl border border-border bg-background/70 px-5 text-sm font-semibold hover:bg-muted" data-testid="button-discard-recording">Discard</button>
+                <button onClick={() => { setAudioBlob(null); setElapsed(0); }} className="min-h-12 flex-1 rounded-2xl border border-border bg-background/70 px-5 text-sm font-semibold hover:bg-muted" data-testid="button-discard-recording">Discard</button>
               </>
             ) : (
               <>
                 <button onClick={() => void startRecording()} disabled={processing} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg shadow-indigo-900/15 transition hover:brightness-105 disabled:opacity-60" data-testid="button-start-recording"><Mic size={17} />Start recording</button>
-                <Link href="/upload" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-border bg-background/70 px-5 text-sm font-semibold text-foreground transition hover:bg-muted" data-testid="link-upload-instead"><Upload size={16} />Upload audio instead</Link>
+                <Link href="/upload" className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl border border-border bg-background/70 px-5 text-sm font-semibold text-foreground transition hover:bg-muted" data-testid="link-upload-instead"><Upload size={16} />Upload audio instead</Link>
               </>
             )}
           </div>

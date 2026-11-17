@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useGetDashboard, getHealthCheckQueryKey, useHealthCheck } from '@workspace/api-client-react';
-import { AudioLines, Check, Clock3, FileAudio2, Mic, Pause, Play, RotateCcw, ShieldCheck, Sparkles, TriangleAlert, Upload } from 'lucide-react';
+import { AudioLines, Check, Clock3, Download, FileAudio2, Mic, Pause, Play, RotateCcw, ShieldCheck, Sparkles, TriangleAlert, Upload } from 'lucide-react';
 import { Link } from 'wouter';
 import { PageHeading } from '@/components/app-shell';
 import { AudioPlayer } from '@/components/AudioPlayer';
@@ -20,6 +20,7 @@ export default function HomePage() {
   const [audioUrl, setAudioUrl] = useState('');
   const [title, setTitle] = useState('');
   const [recordError, setRecordError] = useState('');
+  const [uploadError, setUploadError] = useState('');
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -29,6 +30,32 @@ export default function HomePage() {
     Array.from({ length: 48 }, (_, index) => 10 + ((index * 7) % 9)),
   );
   const { stage, progress, error, processing, processAudio } = useProcessAudio();
+
+  const handleProcessAudio = async (blob: Blob, title: string) => {
+    setUploadError('');
+    try {
+      await processAudio(blob, title);
+    } catch (err) {
+      // If processing fails (e.g., file too large), allow user to download the recording
+      if (err instanceof Error && (err.message.includes('413') || err.message.includes('size') || err.message.includes('too large'))) {
+        setUploadError('Recording is too large for processing. You can download it and try splitting it into smaller segments.');
+      } else {
+        setUploadError(err instanceof Error ? err.message : 'Failed to process recording');
+      }
+    }
+  };
+
+  const downloadRecording = () => {
+    if (!audioBlob) return;
+    const url = URL.createObjectURL(audioBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${title || 'recording'}-${new Date().toISOString().slice(0, 10)}.${audioBlob.type.split('/')[1] || 'webm'}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     if (!recording || paused) {
@@ -179,7 +206,7 @@ export default function HomePage() {
     setRecording(false);
     setPaused(false);
     setElapsed(0);
-    setAudioBlob(null);s
+    setAudioBlob(null);
     setAudioUrl('');
     releaseMicrophone();
   };
@@ -257,6 +284,7 @@ export default function HomePage() {
           )}
 
           {recordError && <p className="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-800 dark:bg-amber-950/45 dark:text-amber-200" role="alert"><TriangleAlert size={15} className="mt-0.5 shrink-0" />{recordError}</p>}
+          {uploadError && <p className="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-800 dark:bg-amber-950/45 dark:text-amber-200" role="alert"><TriangleAlert size={15} className="mt-0.5 shrink-0" />{uploadError}</p>}
           {error && <p className="mt-4 rounded-xl bg-rose-50 p-3 text-xs leading-5 text-rose-800 dark:bg-rose-950/40 dark:text-rose-200" role="alert" data-testid="status-processing-error">{error}</p>}
 
           {processing && (
@@ -279,8 +307,17 @@ export default function HomePage() {
               </>
             ) : audioBlob ? (
               <>
-                <button onClick={() => void processAudio(audioBlob, title)} disabled={processing} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg shadow-indigo-900/15 transition hover:brightness-105 disabled:opacity-60" data-testid="button-process-recording"><Sparkles size={17} />{processing ? 'Preparing your minutes' : 'Create my minutes'}</button>
-                <button onClick={() => { setAudioBlob(null); setElapsed(0); }} className="min-h-12 flex-1 rounded-2xl border border-border bg-background/70 px-5 text-sm font-semibold hover:bg-muted" data-testid="button-discard-recording">Discard</button>
+                {uploadError ? (
+                  <>
+                    <button onClick={downloadRecording} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg shadow-indigo-900/15 transition hover:brightness-105" data-testid="button-download-recording"><Download size={17} />Download recording</button>
+                    <button onClick={() => { setAudioBlob(null); setElapsed(0); setUploadError(''); }} className="min-h-12 flex-1 rounded-2xl border border-border bg-background/70 px-5 text-sm font-semibold hover:bg-muted" data-testid="button-discard-recording">Discard</button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => void handleProcessAudio(audioBlob, title)} disabled={processing} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg shadow-indigo-900/15 transition hover:brightness-105 disabled:opacity-60" data-testid="button-process-recording"><Sparkles size={17} />{processing ? 'Preparing your minutes' : 'Create my minutes'}</button>
+                    <button onClick={() => { setAudioBlob(null); setElapsed(0); }} className="min-h-12 flex-1 rounded-2xl border border-border bg-background/70 px-5 text-sm font-semibold hover:bg-muted" data-testid="button-discard-recording">Discard</button>
+                  </>
+                )}
               </>
             ) : (
               <>

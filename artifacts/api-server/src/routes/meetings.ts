@@ -34,7 +34,7 @@ import { createMeetingDocx, createMeetingPdf } from "../lib/meeting-documents";
 import { uploadMeetingAudio } from "../lib/supabase-storage";
 
 const router: IRouter = Router();
-const MAX_AUDIO_BYTES = 50 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 200 * 1024 * 1024; // 200 MB (allows ~100 min recordings at 128 kbps)
 const confidenceReviewThreshold = 0.6;
 
 const allowedAudioTypes = new Set([
@@ -142,7 +142,7 @@ function attachAudio(req: Request, res: Response, next: NextFunction): void {
       return;
     }
     if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
-      res.status(413).json({ error: "Audio files must be 50 MB or smaller." });
+      res.status(413).json({ error: "Audio files must be 200 MB or smaller. Large recordings will be compressed before storage." });
       return;
     }
     const message = error instanceof Error

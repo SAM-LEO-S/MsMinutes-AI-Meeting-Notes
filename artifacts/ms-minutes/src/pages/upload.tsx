@@ -39,7 +39,7 @@ export default function UploadPage() {
     }
     setLocalError('');
     if (picked.size > maxAudioBytes) {
-      setLocalError('Choose an audio file that is 50 MB or smaller.');
+      setLocalError('Choose an audio file that is 200 MB or smaller. Large files will be compressed before storage.');
       setFile(null);
       return;
     }
@@ -73,7 +73,7 @@ export default function UploadPage() {
             <div className={`mb-4 grid size-14 place-items-center rounded-[20px] shadow-sm transition ${dragging ? 'bg-primary text-primary-foreground' : 'bg-card text-primary'}`}><UploadCloud size={25} /></div>
             <span className="font-serif text-lg font-bold tracking-tight">{dragging ? 'Drop it here' : 'Drop your audio here'}</span>
             <span className="mt-1.5 text-xs text-muted-foreground">or choose a file from your device</span>
-            <span className="mt-5 rounded-full border border-border bg-card/75 px-3 py-1.5 text-[10px] font-semibold tracking-wide text-muted-foreground">MP3 · WAV · M4A · AAC · OGG · FLAC · WEBM · MAX 50 MB</span>
+            <span className="mt-5 rounded-full border border-border bg-card/75 px-3 py-1.5 text-[10px] font-semibold tracking-wide text-muted-foreground">MP3 · WAV · M4A · AAC · OGG · FLAC · WEBM · MAX 200 MB</span>
           </button>
           <input ref={input} type="file" accept="audio/aac,audio/flac,audio/mp4,audio/mpeg,audio/ogg,audio/opus,audio/wav,audio/webm,.mp3,.wav,.m4a,.aac,.ogg,.oga,.opus,.flac,.webm" className="hidden" onChange={(event) => selectFile(event.target.files?.[0])} data-testid="input-audio-file" />
 

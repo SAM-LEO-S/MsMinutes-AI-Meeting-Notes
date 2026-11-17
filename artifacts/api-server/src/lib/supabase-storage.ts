@@ -43,10 +43,10 @@ async function compressAudioForStorage(
     writeFileSync(tempInputPath, audioBuffer);
 
     // Use ffmpeg to compress to MP3 with VBR for better quality
-    // -q:a 4 = VBR quality 4 (good balance, ~65-85 kbps average)
+    // -q:a 5 = VBR quality 5 (more compression, ~48-64 kbps average, excellent for speech)
     // -ac 1 = mono
     // -ar 16000 = 16kHz (speech optimal)
-    const ffmpegCommand = `ffmpeg -i "${tempInputPath}" -c:a libmp3lame -q:a 4 -ac 1 -ar 16000 -y "${tempOutputPath}"`;
+    const ffmpegCommand = `ffmpeg -i "${tempInputPath}" -c:a libmp3lame -q:a 5 -ac 1 -ar 16000 -y "${tempOutputPath}"`;
     
     await execAsync(ffmpegCommand);
 
